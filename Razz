@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Orderflow Terminal - Bookmap / ATAS Style</title>
+    <!-- Lightweight Charts Library for Pro Charts -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #0b0e14;
+            color: #d1d4dc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #131722;
+            border-bottom: 1px solid #2a2e3d;
+        }
+        .logo { font-weight: bold; color: #00e676; font-size: 14px; }
+        .asset-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tab-btn {
+            background: #1e222d;
+            border: 1px solid #2a2e3d;
+            color: #b2b5be;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .tab-btn.active { background: #2962ff; color: #fff; border-color: #2962ff; }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            height: calc(100vh - 49px);
+        }
+        @media (max-width: 900px) {
+            .main-container { grid-template-columns: 1fr; height: auto; }
+        }
+
+        .chart-section {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #2a2e3d;
+            background: #0b0e14;
+        }
+        .chart-header {
+            padding: 8px 12px;
+            background: #131722;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #2a2e3d;
+        }
+        #chart { flex: 1; min-height: 450px; width: 100%; }
+
+        .sidebar {
+            background: #131722;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+            overflow-y: auto;
+        }
+        .panel-title { font-size: 11px; font-weight: bold; color: #787b86; text-transform: uppercase; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .stat-card {
+            background: #1e222d;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #2a2e3d;
+        }
+        .stat-label { font-size: 10px; color: #787b86; }
+        .stat-val { font-size: 14px; font-weight: bold; margin-top: 2px; }
+        .green { color: #089981; }
+        .red { color: #f23645; }
+
+        /* Heatmap DOM Table */
+        .dom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            font-family: monospace;
+        }
+        .dom-table th { text-align: right; color: #787b86; padding: 3px; border-bottom: 1px solid #2a2e3d; }
+        .dom-table td { padding: 3px; text-align: right; }
+        .bid-row { background: rgba(8, 153, 129, 0.15); color: #089981; }
+        .ask-row { background: rgba(242, 54, 69, 0.15); color: #f23645; }
+        
+        .liquidation-feed {
+            background: #1e222d;
+            border: 1px solid #2a2e3d;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 11px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .liq-item { display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px solid #2a2e3d11; padding-bottom: 2px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">⚡ PRO ORDERFLOW (ATAS / BOOKMAP)</div>
+        <div class="asset-tabs">
+            <button class="tab-btn active" onclick="switchSymbol('BTCUSDT', 'BTC/USDT')">BTC</button>
+            <button class="tab-btn" onclick="switchSymbol('XAUUSD', 'XAU/USD')">XAUUSD</button>
+            <button class="tab-btn" onclick="switchSymbol('NQ', 'NQ (Nasdaq)')">NQ</button>
+            <button class="tab-btn" onclick="switchSymbol('GC', 'GC (Gold)')">GC</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="chart-section">
+            <div class="chart-header">
+                <span id="symbol-title">BTC/USDT - Order Flow & Volume Profile</span>
+                <span id="live-price" class="green">Connecting...</span>
+            </div>
+            <div id="chart"></div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel-title">Order Flow Stats & Delta</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Buy Vol</div>
+                    <div class="stat-val green" id="buy-vol">0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Sell Vol</div>
+                    <div class="stat-val red" id="sell-vol">0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Delta</div>
+                    <div class="stat-val" id="delta-val">0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">CVD</div>
+                    <div class="stat-val" id="cvd-val">0.00</div>
+                </div>
+            </div>
+
+            <div class="panel-title" style="margin-top: 5px;">Depth of Market (DOM Heatmap)</div>
+            <table class="dom-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;">Price</th>
+                        <th>Ask Vol</th>
+                        <th>Bid Vol</th>
+                    </tr>
+                </thead>
+                <tbody id="dom-body"></tbody>
+            </table>
+
+            <div class="panel-title" style="margin-top: 5px;">Liquidation Heatmap Feed</div>
+            <div class="liquidation-feed" id="liq-feed">
+                <div style="color: #787b86;">Listening for liquidations...</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let chart, candleSeries, volumeSeries;
+    let ws;
+    let currentSymbol = 'BTCUSDT';
+    let buyVol = 0, sellVol = 0, cvd = 0;
+    let currentCandle = null;
+
+    function initChart() {
+        const el = document.getElementById('chart');
+        el.innerHTML = '';
+        chart = LightweightCharts.createChart(el, {
+            layout: { backgroundColor: '#0b0e14', textColor: '#d1d4dc' },
+            grid: { vertLines: { color: '#1f2433' }, horzLines: { color: '#1f2433' } },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            priceScale: { borderColor: '#2a2e3d' },
+            timeScale: { borderColor: '#2a2e3d', timeVisible: true }
+        });
+
+        candleSeries = chart.addCandlestickSeries({
+            upColor: '#089981', downColor: '#f23645',
+            borderUpColor: '#089981', borderDownColor: '#f23645',
+            wickUpColor: '#089981', wickDownColor: '#f23645'
+        });
+
+        volumeSeries = chart.addHistogramSeries({
+            priceFormat: { type: 'volume' },
+            priceScaleId: '',
+            scaleMargins: { top: 0.8, bottom: 0 }
+        });
+    }
+
+    function switchSymbol(sym, title) {
+        currentSymbol = sym;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('symbol-title').innerText = title + " - Order Flow & Volume Profile";
+        connectMarketData();
+    }
+
+    function connectMarketData() {
+        if (ws) ws.close();
+        initChart();
+        buyVol = 0; sellVol = 0; cvd = 0;
+
+        if (currentSymbol === 'BTCUSDT') {
+            ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade/btcusdt@depth10@100ms');
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.e === 'trade') {
+                    const price = parseFloat(data.p);
+                    const qty = parseFloat(data.q);
+                    const isSell = data.m;
+                    const time = Math.floor(data.T / 1000);
+
+                    document.getElementById('live-price').innerText = "$" + price.toFixed(2);
+                    document.getElementById('live-price').className = isSell ? 'red' : 'green';
+
+                    if (isSell) { sellVol += qty; cvd -= qty; } 
+                    else { buyVol += qty; cvd += qty; }
+
+                    updateStats();
+                    updateCandleData(time, price, qty, isSell);
+
+                    // Mock dynamic liquidations based on volume spikes
+                    if(qty > 1.5) {
+                        addLiquidation(price, qty * price, isSell ? 'SHORT' : 'LONG');
+                    }
+                }
+
+                if (data.bids && data.asks) {
+                    renderDOM(data.bids.slice(0, 5), data.asks.slice(0, 5));
+                }
+            };
+        } else {
+            document.getElementById('live-price').innerText = "Simulated Pro Feed";
+            simulateMarketData();
+        }
+    }
+
+    function updateStats() {
+        document.getElementById('buy-vol').innerText = buyVol.toFixed(2);
+        document.getElementById('sell-vol').innerText = sellVol.toFixed(2);
+        const delta = buyVol - sellVol;
+        const dEl = document.getElementById('delta-vol');
+        dEl.innerText = delta.toFixed(2);
+        dEl.className = 'stat-val ' + (delta >= 0 ? 'green' : 'red');
+
+        const cEl = document.getElementById('cvd-vol');
+        cEl.innerText = cvd.toFixed(2);
+        cEl.className = 'stat-val ' + (cvd >= 0 ? 'green' : 'red');
+    }
+
+    function updateCandleData(time, price, qty, isSell) {
+        const mTime = Math.floor(time / 60) * 60;
+        if (!currentCandle || currentCandle.time !== mTime) {
+            currentCandle = { time: mTime, open: price, high: price, low: price, close: price };
+        } else {
+            currentCandle.high = Math.max(currentCandle.high, price);
+            currentCandle.low = Math.min(currentCandle.low, price);
+            currentCandle.close = price;
+        }
+        candleSeries.update(currentCandle);
+        volumeSeries.update({
+            time: mTime, value: qty,
+            color: isSell ? 'rgba(242, 54, 69, 0.5)' : 'rgba(8, 153, 129, 0.5)'
+        });
+    }
+
+    function renderDOM(bids, asks) {
+        const tbody = document.getElementById('dom-body');
+        tbody.innerHTML = '';
+        asks.reverse().forEach(ask => {
+            tbody.innerHTML += `<tr class="dom-row ask-bg"><td style="text-align:left; font-weight:bold;">${parseFloat(ask[0]).toFixed(2)}</td><td>${parseFloat(ask[1]).toFixed(3)}</td><td>-</td></tr>`;
+        });
+        bids.forEach(bid => {
+            tbody.innerHTML += `<tr class="dom-row bid-bg"><td style="text-align:left; font-weight:bold;">${parseFloat(bid[0]).toFixed(2)}</td><td>-</td><td>${parseFloat(bid[1]).toFixed(3)}</td></tr>`;
+        });
+    }
+
+    function addLiquidation(price, amount, type) {
+        const feed = document.getElementById('liq-feed');
+        const color = type === 'SHORT' ? 'red' : 'green';
+        feed.innerHTML = `<div class="liq-item"><span class="${color}">${type} Liquidated</span><span>$${price.toFixed(2)}</span><span style="color:#787b86">($${amount.toFixed(0)})</span></div>` + feed.innerHTML;
+    }
+
+    function simulateMarketData() {
+        let base = currentSymbol === 'NQ' ? 20450 : (currentSymbol === 'XAUUSD' || currentSymbol === 'GC' ? 2730 : 75000);
+        let bids = [[base - 1, 10], [base - 2, 20]];
+        let asks = [[base + 1, 15], [base + 2, 25]];
+        renderDOM(bids, asks);
+    }
+
+    window.onload = connectMarketData;
+</script>
+</body>
+</html>
